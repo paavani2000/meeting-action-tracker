@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+openai-whisper
+spacy
+transformers
+dateparser
+psycopg2-binary
