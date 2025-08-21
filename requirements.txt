@@ -5,3 +5,4 @@ spacy
 transformers
 dateparser
 psycopg2-binary
+python-multipart
