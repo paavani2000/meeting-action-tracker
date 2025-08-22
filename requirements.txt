@@ -6,3 +6,4 @@ transformers
 dateparser
 psycopg2-binary
 python-multipart
+sqlalchemy
