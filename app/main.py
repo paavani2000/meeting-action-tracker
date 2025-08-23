@@ -4,6 +4,10 @@ from pydantic import BaseModel
 from app.stt import transcribe_audio
 from app import nlp as nlp_mod
 
+# added: DB imports
+from app.db import SessionLocal
+from app.models import Meeting  # or wherever your Meeting class lives
+
 app = FastAPI(title="Meeting Action Tracker")
 
 class TranscriptIn(BaseModel):
@@ -32,7 +36,24 @@ async def process_audio(file: UploadFile = File(...)):
     transcript = transcribe_audio(tmp_path)
     tasks = nlp_mod.extract_tasks(transcript)
     summary = nlp_mod.summarize(transcript)
+
+    # persist to Postgres (uses JSON column `tasks_json`)
+    db = SessionLocal()
+    try:
+        meeting = Meeting(
+            transcript=transcript,
+            summary=summary,
+            tasks_json=tasks
+        )
+        db.add(meeting)
+        db.commit()
+        db.refresh(meeting)
+        meeting_id = meeting.id
+    finally:
+        db.close()
+
     return {
+        "id": meeting_id,
         "transcript": transcript,
         "summary": summary,
         "tasks": tasks
