@@ -1,14 +1,13 @@
+# app/nlp.py
 from __future__ import annotations
+import logging
 from transformers import pipeline
 import spacy
 import dateparser
 from typing import List, Dict, Any, Optional
 import re
-from datetime import datetime
-from functools import lru_cache
-import logging
 from datetime import datetime, timedelta
-
+from functools import lru_cache
 
 logger = logging.getLogger("meeting_tracker.nlp")
 
@@ -20,8 +19,11 @@ def get_classifier():
 
 @lru_cache(maxsize=1)
 def get_nlp():
-    # spaCy English model for NER + sentence split
-    return spacy.load("en_core_web_sm")
+    # Prefer transformer NER if available; fallback to sm
+    try:
+        return spacy.load("en_core_web_trf")
+    except Exception:
+        return spacy.load("en_core_web_sm")
 
 INTENT_LABELS = ["commitment", "request", "information"]
 
@@ -29,7 +31,7 @@ INTENT_LABELS = ["commitment", "request", "information"]
 ACTION_VERB_HINTS = {
     "send","share","submit","finish","complete","review","deploy","fix",
     "update","create","schedule","prepare","write","summarize","follow","follow-up","followup",
-    "email","call","meet","implement","investigate","test","ship","publish","push"
+    "email","call","meet","implement","investigate","test","ship","publish","push","book","notify"
 }
 
 PRONOUNS = {"I","We","You","He","She","They","i","we","you","he","she","they"}
@@ -37,28 +39,23 @@ PRONOUNS = {"I","We","You","He","She","They","i","we","you","he","she","they"}
 def _normalize_dt(text: str, ref: Optional[datetime] = None) -> Optional[str]:
     """
     Parse a natural-language date and return ISO8601.
-    If the parsed date/time is in the past (relative to `ref` or now),
-    bump it forward to the next occurrence (7 days) so 'Friday' means
-    the upcoming Friday, not the previous one.
+    If parsed date/time is in the past, roll forward (7d) so 'Friday'
+    means upcoming Friday, not the previous one.
     """
     base = ref or datetime.now()
     dt = dateparser.parse(
         text,
         settings={
             "RELATIVE_BASE": base,
-            "PREFER_DATES_FROM": "future",  # bias toward future
+            "PREFER_DATES_FROM": "future",
             "RETURN_AS_TIMEZONE_AWARE": False,
         },
     )
     if not dt:
         return None
-
-    # If we still landed in the past (dateparser can do that sometimes), roll forward a week.
     if dt.date() < base.date():
         dt = dt + timedelta(days=7)
-
     return dt.isoformat()
-
 
 def _owner_from_sentence(doc: "spacy.tokens.Doc") -> Optional[str]:
     # Prefer PERSON entities
@@ -67,6 +64,12 @@ def _owner_from_sentence(doc: "spacy.tokens.Doc") -> Optional[str]:
     if persons:
         logger.info("NLP DEBUG owner_by_PERSON=%r", persons[0])
         return persons[0]
+
+    # NEW: fallback to first proper noun (good for short sentences)
+    for token in doc:
+        if token.pos_ == "PROPN":
+            logger.info("NLP DEBUG owner_by_PROPN=%r", token.text)
+            return token.text
 
     # Fall back to first pronoun subject-ish token
     for token in doc:
@@ -119,6 +122,14 @@ def classify_intent(sentence: str) -> str:
     clf = get_classifier()
     res = clf(sentence, INTENT_LABELS)
     top = res["labels"][0]
+
+    # NEW: rule override — treat “will/shall + action verb” as a commitment
+    if re.search(r"\b(will|shall)\b", sentence, re.IGNORECASE):
+        lower = sentence.lower()
+        if any(v in lower for v in ACTION_VERB_HINTS):
+            logger.info("NLP DEBUG intent override -> commitment (rule hit)")
+            return "commitment"
+
     logger.info("NLP DEBUG intent sentence=%r -> %s", sentence, top)
     return top
 
@@ -136,7 +147,7 @@ def extract_tasks(transcript: str, reference_time: Optional[datetime] = None) ->
         intent = classify_intent(sent)
         logger.info("NLP DEBUG [%d] intent=%s", i, intent)
 
-        # --- MINIMAL CHANGE: don't skip on 'information'; still try to extract ---
+        # Keep the softened gate: we still try extraction even if 'information'
         sdoc = nlp(sent)
 
         owner = _owner_from_sentence(sdoc)
@@ -151,14 +162,14 @@ def extract_tasks(transcript: str, reference_time: Optional[datetime] = None) ->
                 deadline_iso = normalized
                 break
 
-        # Only append if we actually found something actionable
+        # Append if actionable
         if intent in ("commitment", "request") or owner or task or deadline_iso:
             item = {
                 "sentence": sent,
-                "type": intent,          # "commitment" / "request" / "information"
-                "owner": owner,          # "I", "Alice", etc.
-                "task": task,            # "send the draft"
-                "deadline": deadline_iso # ISO8601 string or None
+                "type": intent,
+                "owner": owner,
+                "task": task,
+                "deadline": deadline_iso
             }
             logger.info("NLP DEBUG [%d] extracted=%s", i, item)
             tasks.append(item)
