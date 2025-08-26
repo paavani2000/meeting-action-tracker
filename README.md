@@ -1,39 +1,52 @@
-🎤 Meeting Action Tracker
+# 🎤 Meeting Action Tracker
 
 An end-to-end solution for capturing, summarizing, and tracking meeting action items.
 Upload meeting recordings, automatically generate transcripts, extract summaries and actionable tasks using NLP, and persist them to a database.
 Includes a simple React frontend for uploading audio and browsing past meetings.
 
-🧩 Overview
+---
 
-This project is structured into two connected applications:
+## 🧩 Overview
 
-⚙️ Backend (FastAPI + NLP + PostgreSQL/SQLite)
-Processes audio with Whisper, extracts tasks with NLP (spaCy + transformers), summarizes text, and saves everything to the database.
+This project is structured into **two connected applications**:
 
-🌐 Frontend (React + Vite + Tailwind)
-A lightweight web UI to upload audio files, view transcripts, summaries, and tasks, and browse past meetings.
+* ⚙️ **Backend (FastAPI + NLP + PostgreSQL/SQLite)**
+  Processes audio with Whisper, extracts tasks with NLP (spaCy + transformers), summarizes text, and saves everything to the database.
 
-Together, they provide a seamless pipeline for meeting intelligence—from raw audio to structured tasks.
+* 🌐 **Frontend (React + Vite + Tailwind)**
+  A lightweight web UI to upload audio files, view transcripts, summaries, and tasks, and browse past meetings.
 
-🔍 Core Features
+Together, they provide a seamless pipeline for **meeting intelligence**—from raw audio to structured tasks.
 
-✅ Speech-to-Text (STT) – Transcribe meetings using OpenAI Whisper
-✅ Task Extraction – Identify commitments/requests with owners and deadlines
-✅ Summarization – Generate concise meeting summaries
-✅ Persistence – Save transcripts, summaries, and tasks to Postgres (or SQLite)
-✅ Frontend Upload – Upload .wav or .m4a files from browser
-✅ Meeting History – Browse saved meetings and extracted tasks
-✅ Extensible – Ready for Slack/Jira integrations (Phase 5)
+---
 
-🛠 Tech Stack
-Layer	Tech Details
-🎧 STT	OpenAI Whisper
-🧠 NLP	spaCy, Hugging Face Transformers, dateparser
-⚙️ Backend	FastAPI, SQLAlchemy, PostgreSQL (or SQLite)
-🌐 Frontend	React, Vite, Tailwind CSS
-🔗 Integrations (planned)	Slack, Jira, email reminders
-📦 Project Structure
+## 🔍 Core Features
+
+✅ **Speech-to-Text (STT)** – Transcribe meetings using OpenAI Whisper
+✅ **Task Extraction** – Identify commitments/requests with owners and deadlines
+✅ **Summarization** – Generate concise meeting summaries
+✅ **Persistence** – Save transcripts, summaries, and tasks to Postgres (or SQLite)
+✅ **Frontend Upload** – Upload `.wav` or `.m4a` files from browser
+✅ **Meeting History** – Browse saved meetings and extracted tasks
+✅ **Extensible** – Ready for Slack/Jira integrations (Phase 5)
+
+---
+
+## 🛠 Tech Stack
+
+| Layer                         | Tech Details                                 |
+| ----------------------------- | -------------------------------------------- |
+| 🎧 **STT**                    | OpenAI Whisper                               |
+| 🧠 **NLP**                    | spaCy, Hugging Face Transformers, dateparser |
+| ⚙️ **Backend**                | FastAPI, SQLAlchemy, PostgreSQL (or SQLite)  |
+| 🌐 **Frontend**               | React, Vite, Tailwind CSS                    |
+| 🔗 **Integrations (planned)** | Slack, Jira, email reminders                 |
+
+---
+
+## 📦 Project Structure
+
+```
 MEETING-ACTION-TRACKER/
 ├─ backend/
 │  └─ app/
@@ -50,9 +63,15 @@ MEETING-ACTION-TRACKER/
 │  └─ samples/           # Example audio files
 ├─ README.md
 └─ requirements.txt
+```
 
-🚀 Getting Started
-1. Backend
+---
+
+## 🚀 Getting Started
+
+### 1. Backend
+
+```bash
 cd backend
 python -m venv venv
 source venv/bin/activate   # or venv\Scripts\activate on Windows
@@ -63,38 +82,36 @@ python app/init_db.py
 
 # run server
 uvicorn app.main:app --reload
+```
 
+API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-API docs: http://127.0.0.1:8000/docs
+---
 
-2. Frontend
+### 2. Frontend
+
+```bash
 cd frontend
 npm install
 npm run dev
+```
 
+Frontend runs at [http://127.0.0.1:5173](http://127.0.0.1:5173)
 
-Frontend runs at http://127.0.0.1:5173
+---
 
-🛣 Roadmap
+## 🛣 Roadmap
 
- Phase 1 – Speech-to-Text (Whisper)
+* [x] Phase 1 – Speech-to-Text (Whisper)
+* [x] Phase 2 – NLP (Summarization + Task Extraction)
+* [x] Phase 3 – Persistence (Postgres/SQLite)
+* [x] Phase 4 – Frontend (React upload + history)
+* [ ] Phase 5 – Integrations (Slack, Jira, reminders)
 
- Phase 2 – NLP (Summarization + Task Extraction)
+---
 
- Phase 3 – Persistence (Postgres/SQLite)
+## 📡 External Services
 
- Phase 4 – Frontend (React upload + history)
-
- Phase 5 – Integrations (Slack, Jira, reminders)
-
-📡 External Services
-
-OpenAI Whisper (speech-to-text)
-
-Hugging Face Transformers (summarization, intent classification)
-
-spaCy (NER, sentence splitting)
-
-📖 License
-
-MIT License – free to use, modify, and distribute.
+* **OpenAI Whisper** (speech-to-text)
+* **Hugging Face Transformers** (summarization, intent classification)
+* **spaCy** (NER, sentence splitting)
