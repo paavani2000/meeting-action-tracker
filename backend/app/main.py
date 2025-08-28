@@ -1,12 +1,30 @@
 import logging
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from pydantic import BaseModel
 from app.stt import transcribe_audio
 from app import nlp as nlp_mod
+from sqlalchemy.orm import Session
+from app.db import SessionLocal
+from app.models import Meeting
+from typing import List
+
 
 # DB imports
 from app.db import SessionLocal
 from app.models import Meeting  # adjust import if your Meeting model lives elsewhere
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="Meeting Action Tracker")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ---- Logging setup ----
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +38,26 @@ class TranscriptIn(BaseModel):
 class ExtractIn(BaseModel):
     id: int
     text: str
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/meetings")
+def list_meetings(db: Session = Depends(get_db)) -> List[dict]:
+    rows = db.query(Meeting).order_by(Meeting.created_at.desc()).limit(50).all()
+    return [
+        {
+            "id": m.id,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "summary": m.summary,
+            "tasks_json": m.tasks_json,
+        }
+        for m in rows
+    ]
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
