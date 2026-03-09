@@ -1,13 +1,8 @@
-# 🎤 Meeting Action Tracker
-
+🎤 Meeting Action Tracker
 A team tool that turns meeting recordings into structured action items automatically.
-Upload a recording, get a transcript, extract who needs to do what by when, and push tasks directly to Jira.
-No more manual notes. No more dropped action items.
+Upload a recording, get a transcript, extract who needs to do what by when, and push tasks directly to Jira. No more manual notes. No more dropped action items.
 
----
-
-## 🧩 Overview
-
+🧩 Overview
 This project is structured into two connected applications:
 
 ⚙️ Backend (FastAPI + NLP + PostgreSQL)
@@ -17,10 +12,7 @@ A team-facing web UI to upload recordings, view transcripts, summaries, and acti
 
 Together, they provide a seamless pipeline for meeting intelligence from raw audio or video to structured, assigned tasks.
 
----
-
-## 🔍 Core Features
-
+🔍 Core Features
 ✅ Speech-to-Text (STT) - Transcribe meetings using OpenAI Whisper
 ✅ Video Support - .mp4, .mov, .webm and more, auto-converted via ffmpeg
 ✅ Task Extraction - Identify commitments and requests with owners, deadlines, and intent type
@@ -31,23 +23,10 @@ Together, they provide a seamless pipeline for meeting intelligence from raw aud
 ✅ Frontend Upload - Upload audio or video files directly from the browser
 ✅ Meeting History - Browse saved meetings and extracted tasks
 
----
+🛠 Tech Stack
+LayerTech Details🎧 STTOpenAI Whisper🧠 NLPspaCy, Hugging Face Transformers, dateparser⚙️ BackendFastAPI, SQLAlchemy, PostgreSQL🌐 FrontendReact, Vite, Tailwind CSS🎬 Videoffmpeg🔗 IntegrationsJira REST API, SMTP email
 
-## 🛠 Tech Stack
-
-| Layer                         | Tech Details                                 |
-| ----------------------------- | -------------------------------------------- |
-| 🎧 **STT**                    | OpenAI Whisper                               |
-| 🧠 **NLP**                    | spaCy, Hugging Face Transformers, dateparser |
-| ⚙️ **Backend**                | FastAPI, SQLAlchemy, PostgreSQL (or SQLite)  |
-| 🌐 **Frontend**               | React, Vite, Tailwind CSS                    |
-| 🔗 **Integrations**           | Jira REST API, SMTP email                    |
-
----
-
-## 📦 Project Structure
-
-```
+📦 Project Structure
 MEETING-ACTION-TRACKER/
 ├─ backend/
 │  └─ app/
@@ -65,12 +44,8 @@ MEETING-ACTION-TRACKER/
 ├─ .env.example          # Environment variable template
 ├─ README.md
 └─ requirements.txt
-```
 
----
-
-## 🚀 Getting Started
-
+🚀 Getting Started
 Prerequisites
 
 Python 3.9+, Node.js 18+, PostgreSQL
@@ -92,36 +67,28 @@ python app/init_db.py
 # Run server
 uvicorn app.main:app --reload
 API docs: http://127.0.0.1:8000/docs
-
 2. Frontend
 bashcd frontend
 npm install
 npm run dev
 Frontend runs at http://127.0.0.1:5173
 
----
+🛣 Roadmap
 
-## 🛣 Roadmap
-
- - Phase 1 - Speech-to-Text (Whisper)
- - Phase 2 - Video support (ffmpeg)
- - Phase 3 - NLP (Summarization + Task Extraction)
- - Phase 4 - Persistence (PostgreSQL)
- - Phase 5 - Frontend (React upload, progress, results, history)
- - Phase 6 - Jira integration (ticket creation + email notifications)
- - Phase 7 - Slack notifications (post action items to team channel)
- - Phase 8 - Live browser recording (MediaRecorder API)
-
----
-
-## 📡 External Services
-
-- OpenAI Whisper (speech-to-text)
-- Hugging Face Transformers (summarization, intent classification)
-- spaCy (NER, sentence splitting)
-- Jira REST API (ticket creation and assignment)
-- SMTP (email notifications to assignees)
+ Phase 1 - Speech-to-Text (Whisper)
+ Phase 2 - Video support (ffmpeg)
+ Phase 3 - NLP (Summarization + Task Extraction)
+ Phase 4 - Persistence (PostgreSQL)
+ Phase 5 - Frontend (React upload, progress, results, history)
+ Phase 6 - Jira integration (ticket creation + email notifications)
+ Phase 7 - Slack notifications (post action items to team channel)
+ Phase 8 - Live browser recording (MediaRecorder API)
 
 
+📡 External Services
 
-
+OpenAI Whisper (speech-to-text)
+Hugging Face Transformers (summarization, intent classification)
+spaCy (NER, sentence splitting)
+Jira REST API (ticket creation and assignment)
+SMTP (email notifications to assignees)
