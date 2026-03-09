@@ -1,5 +1,7 @@
 import logging
 import os
+import uuid
+import subprocess
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import List
@@ -100,6 +102,37 @@ def send_email(to_email, subject, body):
         server.login(SMTP_USER, SMTP_PASS)
         server.sendmail(msg["From"], [to_email], msg.as_string())
 
+# ---- File handling ----
+VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'}
+
+async def save_and_prepare(file: UploadFile):
+    """
+    Save the uploaded file, extract audio via ffmpeg if it's a video.
+    Returns (audio_path, [temp_paths_to_cleanup]).
+    """
+    ext = os.path.splitext(file.filename or '')[1].lower() or '.wav'
+    uid = uuid.uuid4().hex
+    raw_path = f"tmp_{uid}{ext}"
+
+    with open(raw_path, "wb") as f:
+        f.write(await file.read())
+
+    if ext in VIDEO_EXTENSIONS:
+        wav_path = f"tmp_{uid}.wav"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", raw_path,
+                 "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                 wav_path],
+                check=True, capture_output=True
+            )
+        except subprocess.CalledProcessError as e:
+            os.remove(raw_path)
+            raise HTTPException(status_code=422, detail="ffmpeg failed to extract audio from video")
+        return wav_path, [raw_path, wav_path]
+
+    return raw_path, [raw_path]
+
 # ---- API Endpoints ----
 
 @app.get("/meetings")
@@ -118,14 +151,16 @@ def list_meetings(db: Session = Depends(get_db)) -> List[dict]:
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """
-    Step 1 (draft): Transcribe audio, create a draft Meeting row
+    Step 1 (draft): Transcribe audio/video, create a draft Meeting row
     with transcript only, and return its id.
     """
-    tmp_path = "temp_upload.wav"
-    with open(tmp_path, "wb") as f:
-        f.write(await file.read())
-
-    text = transcribe_audio(tmp_path)
+    audio_path, tmp_files = await save_and_prepare(file)
+    try:
+        text = transcribe_audio(audio_path)
+    finally:
+        for p in tmp_files:
+            if os.path.exists(p):
+                os.remove(p)
     logger.info("E2E DEBUG /transcribe transcript_preview=%r", (text or "")[:150])
 
     db = SessionLocal()
@@ -183,11 +218,13 @@ async def process_audio(file: UploadFile = File(...)):
     """
     One-shot path: transcribe -> NLP -> save full record.
     """
-    tmp_path = "temp_upload.wav"
-    with open(tmp_path, "wb") as f:
-        f.write(await file.read())
-
-    transcript = transcribe_audio(tmp_path)
+    audio_path, tmp_files = await save_and_prepare(file)
+    try:
+        transcript = transcribe_audio(audio_path)
+    finally:
+        for p in tmp_files:
+            if os.path.exists(p):
+                os.remove(p)
     logger.info("E2E DEBUG /process-audio transcript_preview=%r", (transcript or "")[:150])
 
     tasks = nlp_mod.extract_tasks(transcript)
