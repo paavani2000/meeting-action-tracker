@@ -250,7 +250,9 @@ function MeetingHistory({ meetings, onSelect }) {
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#7c3aed50'; e.currentTarget.style.background = '#1e293b' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e293b'; e.currentTarget.style.background = '#0f172a' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 600 }}>Meeting #{m.id}</span>
+            <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 600 }}>
+              {m.name || (m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `Meeting #${m.id}`)}
+            </span>
             <span style={{ color: '#334155', fontSize: 11 }}>
               {m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
             </span>
@@ -297,6 +299,7 @@ function SectionHeader({ icon, title, badge, action }) {
 export default function App() {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState(null)
+  const [meetingName, setMeetingName] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
@@ -318,10 +321,11 @@ export default function App() {
     setStep(1); setStatus('Transcribing audio with Whisper...')
     const form = new FormData()
     form.append('file', f)
+    form.append('name', meetingName.trim())
     try {
       const r1 = await fetch(`${API}/transcribe`, { method: 'POST', body: form })
       if (!r1.ok) throw new Error((await r1.json().catch(() => ({}))).detail || 'Transcription failed')
-      const { id, transcript } = await r1.json()
+      const { id, transcript, name } = await r1.json()
 
       setStep(2); setStatus('Running NLP pipeline — extracting tasks & summary...')
 
@@ -333,14 +337,14 @@ export default function App() {
       if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).detail || 'NLP extraction failed')
       const data = await r2.json()
 
-      setStep(3); setStatus(''); setResult({ ...data, transcript }); loadHistory()
+      setStep(3); setStatus(''); setResult({ ...data, transcript, name }); loadHistory()
     } catch (err) {
       setError(err.message || 'Something went wrong. Is the backend running?')
       setStep(0); setStatus('')
     }
   }
 
-  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false) }
+  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false); setMeetingName('') }
 
   const handleToggleHistory = async () => {
     if (!showHistory && meetings.length === 0) await loadHistory()
@@ -348,7 +352,7 @@ export default function App() {
   }
 
   const handleSelectMeeting = (m) => {
-    setResult({ id: m.id, summary: m.summary, tasks: m.tasks_json || [] })
+    setResult({ id: m.id, name: m.name || '', summary: m.summary, tasks: m.tasks_json || [] })
     setStep(3); setError(''); setShowHistory(false)
   }
 
@@ -390,6 +394,23 @@ export default function App() {
         {/* ── Upload / Processing ── */}
         {step < 3 && (
           <div>
+            {step === 0 && (
+              <input
+                type="text"
+                placeholder="Meeting name (optional)"
+                value={meetingName}
+                onChange={e => setMeetingName(e.target.value)}
+                style={{
+                  width: '100%', marginBottom: 12,
+                  background: '#0f172a', border: '1px solid #1e293b',
+                  borderRadius: 12, padding: '12px 16px',
+                  color: '#e2e8f0', fontSize: 14, outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={e => e.target.style.borderColor = '#7c3aed60'}
+                onBlur={e => e.target.style.borderColor = '#1e293b'}
+              />
+            )}
             <UploadZone onFile={handleFile} disabled={step > 0} />
 
             {step > 0 && <ProcessingCard file={file} status={status} />}
@@ -434,7 +455,7 @@ export default function App() {
                 icon={<svg width="14" height="14" fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>}
-                title="Summary"
+                title={result.name || 'Summary'}
                 action={
                   <button onClick={reset} style={{
                     background: '#1e293b', border: '1px solid #334155', borderRadius: 8,

@@ -2,7 +2,7 @@ import logging
 import os
 import uuid
 import subprocess
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import List
 from dotenv import load_dotenv
@@ -28,6 +28,7 @@ SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 # ---- Logging setup ----
 logging.basicConfig(level=logging.INFO)
@@ -142,6 +143,7 @@ def list_meetings(db: Session = Depends(get_db)) -> List[dict]:
         {
             "id": m.id,
             "created_at": m.created_at.isoformat() if m.created_at else None,
+            "name": m.name or "",
             "summary": m.summary,
             "tasks_json": m.tasks_json,
         }
@@ -149,7 +151,7 @@ def list_meetings(db: Session = Depends(get_db)) -> List[dict]:
     ]
 
 @app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+async def transcribe(file: UploadFile = File(...), name: str = Form("")):
     """
     Step 1 (draft): Transcribe audio/video, create a draft Meeting row
     with transcript only, and return its id.
@@ -166,6 +168,7 @@ async def transcribe(file: UploadFile = File(...)):
     db = SessionLocal()
     try:
         meeting = Meeting(
+            name=name.strip() or "",
             transcript=text,
             summary="",
             tasks_json=[]
@@ -178,7 +181,7 @@ async def transcribe(file: UploadFile = File(...)):
     finally:
         db.close()
 
-    return {"id": meeting_id, "transcript": text}
+    return {"id": meeting_id, "transcript": text, "name": name.strip() or ""}
 
 @app.post("/extract")
 async def extract(body: ExtractIn):
@@ -210,6 +213,20 @@ async def extract(body: ExtractIn):
         logger.info("E2E DEBUG /extract updated id=%s tasks_len=%d", meeting.id, len(tasks))
     finally:
         db.close()
+
+    if SLACK_WEBHOOK_URL:
+        try:
+            meeting_label = meeting.name if meeting.name else f"Meeting #{body.id}"
+            lines = [f"*{meeting_label} — Action Items*"]
+            for t in tasks:
+                owner = t.get("owner") or "Unassigned"
+                task = t.get("task") or t.get("sentence", "")
+                deadline = t.get("deadline", "")
+                deadline_str = f" — due {deadline[:10]}" if deadline else ""
+                lines.append(f"• *{owner}*: {task}{deadline_str}")
+            requests.post(SLACK_WEBHOOK_URL, json={"text": "\n".join(lines)}, timeout=5)
+        except Exception:
+            pass  # Slack notification is best-effort
 
     return {"id": body.id, "summary": summary, "tasks": tasks}
 

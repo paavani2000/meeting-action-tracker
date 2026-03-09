@@ -8,6 +8,7 @@ class Meeting(Base):
 
     id = Column(Integer, primary_key=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    name = Column(String, nullable=True, default="")
     transcript = Column(Text, nullable=False)
     summary = Column(Text, nullable=False)
     tasks_json = Column(JSON, nullable=False)
