@@ -103,14 +103,14 @@ Frontend runs at http://127.0.0.1:5173
 
 ## 🛣 Roadmap
 
- Phase 1 - Speech-to-Text (Whisper)
- Phase 2 - Video support (ffmpeg)
- Phase 3 - NLP (Summarization + Task Extraction)
- Phase 4 - Persistence (PostgreSQL)
- Phase 5 - Frontend (React upload, progress, results, history)
- Phase 6 - Jira integration (ticket creation + email notifications)
- Phase 7 - Slack notifications (post action items to team channel)
- Phase 8 - Live browser recording (MediaRecorder API)
+ - Phase 1 - Speech-to-Text (Whisper)
+ - Phase 2 - Video support (ffmpeg)
+ - Phase 3 - NLP (Summarization + Task Extraction)
+ - Phase 4 - Persistence (PostgreSQL)
+ - Phase 5 - Frontend (React upload, progress, results, history)
+ - Phase 6 - Jira integration (ticket creation + email notifications)
+ - Phase 7 - Slack notifications (post action items to team channel)
+ - Phase 8 - Live browser recording (MediaRecorder API)
 
 ---
 
@@ -121,4 +121,5 @@ Hugging Face Transformers (summarization, intent classification)
 spaCy (NER, sentence splitting)
 Jira REST API (ticket creation and assignment)
 SMTP (email notifications to assignees)
+
 
