@@ -1,20 +1,37 @@
 import logging
+import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import List
+from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+import requests
+
+# ---- Your NLP & DB imports ----
 from app.stt import transcribe_audio
 from app import nlp as nlp_mod
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Meeting
-from typing import List
-
-
-# DB imports
-from app.db import SessionLocal
-from app.models import Meeting  # adjust import if your Meeting model lives elsewhere
 
 from fastapi.middleware.cors import CORSMiddleware
 
+# ---- Load environment variables ----
+load_dotenv()
+JIRA_BASE = os.getenv("JIRA_BASE")
+JIRA_EMAIL = os.getenv("JIRA_EMAIL")
+JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASS = os.getenv("SMTP_PASS")
+
+# ---- Logging setup ----
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("meeting_tracker")
+
+# ---- FastAPI app ----
 app = FastAPI(title="Meeting Action Tracker")
 
 app.add_middleware(
@@ -25,13 +42,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---- DB dependency ----
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# ---- Logging setup ----
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("meeting_tracker")
-
-app = FastAPI(title="Meeting Action Tracker")
-
+# ---- Pydantic models ----
 class TranscriptIn(BaseModel):
     text: str
 
@@ -39,12 +58,49 @@ class ExtractIn(BaseModel):
     id: int
     text: str
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+class JiraTicketIn(BaseModel):
+    meeting_id: int
+    assignee_email: EmailStr
+
+# ---- Helper functions for Jira/email ----
+def get_jira_account_id(email: str):
+    url = f"{JIRA_BASE}/rest/api/3/user/search?query={email}"
+    resp = requests.get(url, auth=(JIRA_EMAIL, JIRA_API_TOKEN))
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail="Failed to fetch Jira user")
+    users = resp.json()
+    if not users:
+        raise HTTPException(status_code=404, detail=f"No Jira user found for {email}")
+    return users[0]["accountId"]
+
+def create_jira_issue(summary, description, account_id):
+    url = f"{JIRA_BASE}/rest/api/3/issue"
+    payload = {
+        "fields": {
+            "project": {"key": "KAN"},  # Replace with your Jira project key
+            "summary": summary,
+            "description": description,
+            "issuetype": {"name": "Task"},
+            "assignee": {"id": account_id}
+        }
+    }
+    resp = requests.post(url, json=payload, auth=(JIRA_EMAIL, JIRA_API_TOKEN))
+    if resp.status_code != 201:
+        raise HTTPException(status_code=resp.status_code, detail="Failed to create Jira issue")
+    return resp.json()
+
+def send_email(to_email, subject, body):
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = SMTP_USER
+    msg["To"] = to_email
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.sendmail(msg["From"], [to_email], msg.as_string())
+
+# ---- API Endpoints ----
 
 @app.get("/meetings")
 def list_meetings(db: Session = Depends(get_db)) -> List[dict]:
@@ -72,13 +128,12 @@ async def transcribe(file: UploadFile = File(...)):
     text = transcribe_audio(tmp_path)
     logger.info("E2E DEBUG /transcribe transcript_preview=%r", (text or "")[:150])
 
-    # Create DRAFT row: transcript only
     db = SessionLocal()
     try:
         meeting = Meeting(
             transcript=text,
-            summary="",       # draft
-            tasks_json=[],    # draft (empty JSON array)
+            summary="",
+            tasks_json=[]
         )
         db.add(meeting)
         db.commit()
@@ -98,14 +153,12 @@ async def extract(body: ExtractIn):
     """
     logger.info("E2E DEBUG /extract id=%s", body.id)
 
-    # Run NLP
     tasks = nlp_mod.extract_tasks(body.text)
     summary = nlp_mod.summarize(body.text)
 
     logger.info("E2E DEBUG /extract tasks_count=%d example=%r", len(tasks), tasks[0] if tasks else None)
     logger.info("E2E DEBUG /extract summary_preview=%r", (summary or "")[:150])
 
-    # Update existing row
     db = SessionLocal()
     try:
         meeting = db.get(Meeting, body.id)
@@ -113,7 +166,6 @@ async def extract(body: ExtractIn):
             logger.error("E2E ERROR /extract Meeting id=%s not found", body.id)
             raise HTTPException(status_code=404, detail=f"Meeting id {body.id} not found")
 
-        # Keep transcript consistent with what we just analyzed
         meeting.transcript = body.text
         meeting.summary = summary
         meeting.tasks_json = tasks
@@ -144,7 +196,6 @@ async def process_audio(file: UploadFile = File(...)):
     summary = nlp_mod.summarize(transcript)
     logger.info("E2E DEBUG /process-audio summary_preview=%r", (summary or "")[:150])
 
-    # persist to Postgres (uses JSON column `tasks_json`)
     db = SessionLocal()
     try:
         meeting = Meeting(
@@ -166,3 +217,31 @@ async def process_audio(file: UploadFile = File(...)):
         "summary": summary,
         "tasks": tasks
     }
+
+@app.post("/create-jira-tickets")
+def create_jira_tickets(data: JiraTicketIn, db: Session = Depends(get_db)):
+    """
+    Create Jira tickets for all tasks in a meeting and email the assignee.
+    """
+    meeting = db.get(Meeting, data.meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail=f"Meeting id {data.meeting_id} not found")
+
+    if not meeting.tasks_json:
+        raise HTTPException(status_code=400, detail="No tasks found for this meeting")
+
+    account_id = get_jira_account_id(data.assignee_email)
+
+    created_tickets = []
+    for task in meeting.tasks_json:
+        issue = create_jira_issue(task, f"Auto-generated from Meeting ID {meeting.id}", account_id)
+        send_email(
+            data.assignee_email,
+            f"New Jira Ticket Assigned: {issue['key']}",
+            f"You have been assigned a new Jira ticket.\n\n"
+            f"Task: {task}\n"
+            f"Ticket Link: {JIRA_BASE}/browse/{issue['key']}"
+        )
+        created_tickets.append(issue["key"])
+
+    return {"status": "success", "tickets": created_tickets}
