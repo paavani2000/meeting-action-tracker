@@ -116,10 +116,11 @@ Frontend runs at http://127.0.0.1:5173
 
 ## 📡 External Services
 
-OpenAI Whisper (speech-to-text)
-Hugging Face Transformers (summarization, intent classification)
-spaCy (NER, sentence splitting)
-Jira REST API (ticket creation and assignment)
-SMTP (email notifications to assignees)
+- OpenAI Whisper (speech-to-text)
+- Hugging Face Transformers (summarization, intent classification)
+- spaCy (NER, sentence splitting)
+- Jira REST API (ticket creation and assignment)
+- SMTP (email notifications to assignees)
+
 
 
