@@ -1,34 +1,35 @@
 # 🎤 Meeting Action Tracker
 
-An end-to-end solution for capturing, summarizing, and tracking meeting action items.
-Upload meeting recordings, automatically generate transcripts, extract summaries and actionable tasks using NLP, and persist them to a database.
-Includes a simple React frontend for uploading audio and browsing past meetings.
+A team tool that turns meeting recordings into structured action items automatically.
+Upload a recording, get a transcript, extract who needs to do what by when, and push tasks directly to Jira.
+No more manual notes. No more dropped action items.
 
 ---
 
 ## 🧩 Overview
 
-This project is structured into **two connected applications**:
+This project is structured into two connected applications:
 
-* ⚙️ **Backend (FastAPI + NLP + PostgreSQL/SQLite)**
-  Processes audio with Whisper, extracts tasks with NLP (spaCy + transformers), summarizes text, and saves everything to the database.
+⚙️ Backend (FastAPI + NLP + PostgreSQL)
+Processes audio and video with Whisper, extracts action items and summaries using NLP (spaCy + Transformers), persists results to PostgreSQL, and integrates with Jira and email.
+🌐 Frontend (React + Vite + Tailwind)
+A team-facing web UI to upload recordings, view transcripts, summaries, and action item cards, browse past meetings, and trigger Jira ticket creation.
 
-* 🌐 **Frontend (React + Vite + Tailwind)**
-  A lightweight web UI to upload audio files, view transcripts, summaries, and tasks, and browse past meetings.
-
-Together, they provide a seamless pipeline for **meeting intelligence**—from raw audio to structured tasks.
+Together, they provide a seamless pipeline for meeting intelligence from raw audio or video to structured, assigned tasks.
 
 ---
 
 ## 🔍 Core Features
 
-✅ **Speech-to-Text (STT)** – Transcribe meetings using OpenAI Whisper
-✅ **Task Extraction** – Identify commitments/requests with owners and deadlines
-✅ **Summarization** – Generate concise meeting summaries
-✅ **Persistence** – Save transcripts, summaries, and tasks to Postgres (or SQLite)
-✅ **Frontend Upload** – Upload `.wav` or `.m4a` files from browser
-✅ **Meeting History** – Browse saved meetings and extracted tasks
-✅ **Extensible** – Ready for Slack/Jira integrations (Phase 5)
+✅ Speech-to-Text (STT) - Transcribe meetings using OpenAI Whisper
+✅ Video Support - .mp4, .mov, .webm and more, auto-converted via ffmpeg
+✅ Task Extraction - Identify commitments and requests with owners, deadlines, and intent type
+✅ Summarization - Generate concise meeting summaries
+✅ Jira Integration - Create Jira tickets from action items, assigned by email
+✅ Email Notifications - Notify assignees when a ticket is created
+✅ Persistence - Save transcripts, summaries, and tasks to PostgreSQL
+✅ Frontend Upload - Upload audio or video files directly from the browser
+✅ Meeting History - Browse saved meetings and extracted tasks
 
 ---
 
@@ -40,7 +41,7 @@ Together, they provide a seamless pipeline for **meeting intelligence**—from r
 | 🧠 **NLP**                    | spaCy, Hugging Face Transformers, dateparser |
 | ⚙️ **Backend**                | FastAPI, SQLAlchemy, PostgreSQL (or SQLite)  |
 | 🌐 **Frontend**               | React, Vite, Tailwind CSS                    |
-| 🔗 **Integrations (planned)** | Slack, Jira, email reminders                 |
+| 🔗 **Integrations**           | Jira REST API, SMTP email                    |
 
 ---
 
@@ -50,17 +51,18 @@ Together, they provide a seamless pipeline for **meeting intelligence**—from r
 MEETING-ACTION-TRACKER/
 ├─ backend/
 │  └─ app/
-│     ├─ main.py         # FastAPI entrypoint
-│     ├─ stt.py          # Speech-to-text logic
+│     ├─ main.py         # FastAPI entrypoint (transcribe, extract, Jira)
+│     ├─ stt.py          # Speech-to-text + ffmpeg video extraction
 │     ├─ nlp.py          # NLP pipeline (tasks + summary)
 │     ├─ models.py       # SQLAlchemy models
 │     ├─ db.py           # DB session + engine
 │     └─ init_db.py      # Create tables
 ├─ frontend/
-│  ├─ src/App.jsx        # React UI
+│  ├─ src/App.jsx        # React UI (upload, progress, results, history)
 │  └─ package.json
 ├─ data/
 │  └─ samples/           # Example audio files
+├─ .env.example          # Environment variable template
 ├─ README.md
 └─ requirements.txt
 ```
@@ -69,49 +71,54 @@ MEETING-ACTION-TRACKER/
 
 ## 🚀 Getting Started
 
-### 1. Backend
+Prerequisites
 
-```bash
-cd backend
+Python 3.9+, Node.js 18+, PostgreSQL
+ffmpeg: brew install ffmpeg (Mac) or apt install ffmpeg (Linux)
+
+1. Backend
+bashcd backend
 python -m venv venv
 source venv/bin/activate   # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
+python -m spacy download en_core_web_sm
 
-# init database
+# Copy and fill in environment variables
+cp ../.env.example .env
+
+# Init database
 python app/init_db.py
 
-# run server
+# Run server
 uvicorn app.main:app --reload
-```
+API docs: http://127.0.0.1:8000/docs
 
-API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
----
-
-### 2. Frontend
-
-```bash
-cd frontend
+2. Frontend
+bashcd frontend
 npm install
 npm run dev
-```
-
-Frontend runs at [http://127.0.0.1:5173](http://127.0.0.1:5173)
+Frontend runs at http://127.0.0.1:5173
 
 ---
 
 ## 🛣 Roadmap
 
-* [x] Phase 1 – Speech-to-Text (Whisper)
-* [x] Phase 2 – NLP (Summarization + Task Extraction)
-* [x] Phase 3 – Persistence (Postgres/SQLite)
-* [x] Phase 4 – Frontend (React upload + history)
-* [ ] Phase 5 – Integrations (Slack, Jira, reminders)
+ Phase 1 - Speech-to-Text (Whisper)
+ Phase 2 - Video support (ffmpeg)
+ Phase 3 - NLP (Summarization + Task Extraction)
+ Phase 4 - Persistence (PostgreSQL)
+ Phase 5 - Frontend (React upload, progress, results, history)
+ Phase 6 - Jira integration (ticket creation + email notifications)
+ Phase 7 - Slack notifications (post action items to team channel)
+ Phase 8 - Live browser recording (MediaRecorder API)
 
 ---
 
 ## 📡 External Services
 
-* **OpenAI Whisper** (speech-to-text)
-* **Hugging Face Transformers** (summarization, intent classification)
-* **spaCy** (NER, sentence splitting)
+OpenAI Whisper (speech-to-text)
+Hugging Face Transformers (summarization, intent classification)
+spaCy (NER, sentence splitting)
+Jira REST API (ticket creation and assignment)
+SMTP (email notifications to assignees)
+
