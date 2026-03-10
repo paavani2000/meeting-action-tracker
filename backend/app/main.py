@@ -24,6 +24,7 @@ load_dotenv()
 JIRA_BASE = os.getenv("JIRA_BASE")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "KAN")
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
@@ -70,26 +71,30 @@ def get_jira_account_id(email: str):
     url = f"{JIRA_BASE}/rest/api/3/user/search?query={email}"
     resp = requests.get(url, auth=(JIRA_EMAIL, JIRA_API_TOKEN))
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail="Failed to fetch Jira user")
+        raise HTTPException(status_code=resp.status_code, detail=f"Jira user lookup failed {resp.status_code}: {resp.text[:300]}")
     users = resp.json()
     if not users:
         raise HTTPException(status_code=404, detail=f"No Jira user found for {email}")
     return users[0]["accountId"]
 
-def create_jira_issue(summary, description, account_id):
+def create_jira_issue(summary: str, description: str, account_id: str):
     url = f"{JIRA_BASE}/rest/api/3/issue"
     payload = {
         "fields": {
-            "project": {"key": "KAN"},  # Replace with your Jira project key
-            "summary": summary,
-            "description": description,
+            "project": {"key": JIRA_PROJECT_KEY},
+            "summary": summary[:255],
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": description}]}]
+            },
             "issuetype": {"name": "Task"},
             "assignee": {"id": account_id}
         }
     }
     resp = requests.post(url, json=payload, auth=(JIRA_EMAIL, JIRA_API_TOKEN))
     if resp.status_code != 201:
-        raise HTTPException(status_code=resp.status_code, detail="Failed to create Jira issue")
+        raise HTTPException(status_code=resp.status_code, detail=f"Jira error {resp.status_code}: {resp.text[:300]}")
     return resp.json()
 
 def send_email(to_email, subject, body):
@@ -288,12 +293,13 @@ def create_jira_tickets(data: JiraTicketIn, db: Session = Depends(get_db)):
 
     created_tickets = []
     for task in meeting.tasks_json:
-        issue = create_jira_issue(task, f"Auto-generated from Meeting ID {meeting.id}", account_id)
+        task_text = task.get("task") or task.get("sentence", "") if isinstance(task, dict) else str(task)
+        issue = create_jira_issue(task_text, f"Auto-generated from Meeting ID {meeting.id}", account_id)
         send_email(
             data.assignee_email,
             f"New Jira Ticket Assigned: {issue['key']}",
             f"You have been assigned a new Jira ticket.\n\n"
-            f"Task: {task}\n"
+            f"Task: {task_text}\n"
             f"Ticket Link: {JIRA_BASE}/browse/{issue['key']}"
         )
         created_tickets.append(issue["key"])

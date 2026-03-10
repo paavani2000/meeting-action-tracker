@@ -306,6 +306,29 @@ export default function App() {
   const [meetings, setMeetings] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [jiraEmail, setJiraEmail] = useState('')
+  const [jiraLoading, setJiraLoading] = useState(false)
+  const [jiraResult, setJiraResult] = useState(null)  // { tickets: [...] } or { error: '...' }
+
+  const handleCreateJira = async () => {
+    if (!jiraEmail.trim() || !result?.id) return
+    setJiraLoading(true)
+    setJiraResult(null)
+    try {
+      const res = await fetch(`${API}/create-jira-tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting_id: result.id, assignee_email: jiraEmail.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Failed to create Jira tickets')
+      setJiraResult({ tickets: data.tickets })
+    } catch (err) {
+      setJiraResult({ error: err.message })
+    } finally {
+      setJiraLoading(false)
+    }
+  }
 
   const loadHistory = async () => {
     setHistoryLoading(true)
@@ -344,7 +367,7 @@ export default function App() {
     }
   }
 
-  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false); setMeetingName('') }
+  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false); setMeetingName(''); setJiraEmail(''); setJiraResult(null) }
 
   const handleToggleHistory = async () => {
     if (!showHistory && meetings.length === 0) await loadHistory()
@@ -505,6 +528,76 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* Jira */}
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 18, padding: '24px 28px' }}>
+              <SectionHeader
+                icon={<svg width="14" height="14" fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>}
+                title="Create Jira Tickets"
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  type="email"
+                  placeholder="Assignee email"
+                  value={jiraEmail}
+                  onChange={e => { setJiraEmail(e.target.value); setJiraResult(null) }}
+                  style={{
+                    flex: 1, background: '#1e293b', border: '1px solid #334155',
+                    borderRadius: 10, padding: '10px 14px',
+                    color: '#e2e8f0', fontSize: 13, outline: 'none',
+                  }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed60'}
+                  onBlur={e => e.target.style.borderColor = '#334155'}
+                />
+                <button
+                  onClick={handleCreateJira}
+                  disabled={jiraLoading || !jiraEmail.trim()}
+                  style={{
+                    background: jiraLoading || !jiraEmail.trim() ? '#1e293b' : '#7c3aed',
+                    border: 'none', borderRadius: 10,
+                    color: jiraLoading || !jiraEmail.trim() ? '#475569' : '#fff',
+                    fontSize: 13, fontWeight: 600, padding: '10px 20px',
+                    cursor: jiraLoading || !jiraEmail.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    transition: 'background 0.2s',
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {jiraLoading ? <><SpinIcon size={13} /> Creating...</> : 'Create Tickets'}
+                </button>
+              </div>
+
+              {jiraResult?.tickets && (
+                <div style={{
+                  marginTop: 14, background: '#16a34a15', border: '1px solid #16a34a30',
+                  borderRadius: 10, padding: '12px 16px',
+                }}>
+                  <p style={{ color: '#4ade80', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                    {jiraResult.tickets.length} ticket{jiraResult.tickets.length !== 1 ? 's' : ''} created
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {jiraResult.tickets.map(key => (
+                      <span key={key} style={{
+                        background: '#16a34a20', border: '1px solid #16a34a40',
+                        color: '#86efac', fontSize: 12, fontWeight: 600,
+                        padding: '3px 10px', borderRadius: 999,
+                      }}>{key}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {jiraResult?.error && (
+                <div style={{
+                  marginTop: 14, background: '#ef444415', border: '1px solid #ef444430',
+                  borderRadius: 10, padding: '12px 16px',
+                }}>
+                  <p style={{ color: '#fca5a5', fontSize: 13 }}>{jiraResult.error}</p>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
