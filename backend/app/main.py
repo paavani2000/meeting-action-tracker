@@ -216,13 +216,13 @@ async def extract(body: ExtractIn):
 
     if SLACK_WEBHOOK_URL:
         try:
-            meeting_label = meeting.name if meeting.name else f"Meeting #{body.id}"
-            lines = [f"*{meeting_label} — Action Items*"]
+            meeting_label = meeting.name if meeting.name else f"Meeting on {meeting.created_at.strftime('%b %d') if meeting.created_at else f'#{body.id}'}"
+            lines = [f"*{meeting_label}: Action Items*"]
             for t in tasks:
                 owner = t.get("owner") or "Unassigned"
                 task = t.get("task") or t.get("sentence", "")
                 deadline = t.get("deadline", "")
-                deadline_str = f" — due {deadline[:10]}" if deadline else ""
+                deadline_str = f", due {deadline[:10]}" if deadline else ""
                 lines.append(f"• *{owner}*: {task}{deadline_str}")
             requests.post(SLACK_WEBHOOK_URL, json={"text": "\n".join(lines)}, timeout=5)
         except Exception:
