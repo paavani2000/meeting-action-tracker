@@ -6,3 +6,19 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Temp audio/video files
+temp_upload.*
+*.wav
+tmp_*.wav
+tmp_*.mp4
+tmp_*.webm
+tmp_*.mov
+tmp_*.avi
+tmp_*.mkv
+tmp_*.m4v
+tmp_*.mp3
+tmp_*.m4a
+
+# Environment variables
+.env
