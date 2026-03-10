@@ -15,12 +15,3 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
-
-class Meeting(Base):
-    __tablename__ = "meetings"
-
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    transcript = Column(Text)
-    summary = Column(Text)
-    tasks_json = Column(Text)  # store JSON as string for now

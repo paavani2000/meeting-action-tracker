@@ -63,10 +63,6 @@ class ExtractIn(BaseModel):
     id: int
     text: str
 
-class JiraTicketIn(BaseModel):
-    meeting_id: int
-    assignee_email: EmailStr
-
 class TeamMemberIn(BaseModel):
     name: str
     email: EmailStr
@@ -337,31 +333,3 @@ def delete_team_member(member_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "deleted"}
 
-@app.post("/create-jira-tickets")
-def create_jira_tickets(data: JiraTicketIn, db: Session = Depends(get_db)):
-    """
-    Create Jira tickets for all tasks in a meeting and email the assignee.
-    """
-    meeting = db.get(Meeting, data.meeting_id)
-    if not meeting:
-        raise HTTPException(status_code=404, detail=f"Meeting id {data.meeting_id} not found")
-
-    if not meeting.tasks_json:
-        raise HTTPException(status_code=400, detail="No tasks found for this meeting")
-
-    account_id = get_jira_account_id(data.assignee_email)
-
-    created_tickets = []
-    for task in meeting.tasks_json:
-        task_text = task.get("task") or task.get("sentence", "") if isinstance(task, dict) else str(task)
-        issue = create_jira_issue(task_text, f"Auto-generated from Meeting ID {meeting.id}", account_id)
-        send_email(
-            data.assignee_email,
-            f"New Jira Ticket Assigned: {issue['key']}",
-            f"You have been assigned a new Jira ticket.\n\n"
-            f"Task: {task_text}\n"
-            f"Ticket Link: {JIRA_BASE}/browse/{issue['key']}"
-        )
-        created_tickets.append(issue["key"])
-
-    return {"status": "success", "tickets": created_tickets}

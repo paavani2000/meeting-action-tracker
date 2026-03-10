@@ -72,9 +72,6 @@ MEETING-ACTION-TRACKER/
 ├─ frontend/
 │  ├─ src/App.jsx        # React UI (upload, progress, results, history)
 │  └─ package.json
-├─ data/
-│  └─ samples/           # Example audio files
-├─ .env.example          # Environment variable template
 ├─ README.md
 └─ requirements.txt
 ```
