@@ -297,6 +297,7 @@ function SectionHeader({ icon, title, badge, action }) {
 
 // ── App ────────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [tab, setTab] = useState('upload') // 'upload' | 'team'
   const [step, setStep] = useState(0)
   const [file, setFile] = useState(null)
   const [meetingName, setMeetingName] = useState('')
@@ -306,28 +307,42 @@ export default function App() {
   const [meetings, setMeetings] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [jiraEmail, setJiraEmail] = useState('')
-  const [jiraLoading, setJiraLoading] = useState(false)
-  const [jiraResult, setJiraResult] = useState(null)  // { tickets: [...] } or { error: '...' }
+  const [team, setTeam] = useState([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [teamError, setTeamError] = useState('')
 
-  const handleCreateJira = async () => {
-    if (!jiraEmail.trim() || !result?.id) return
-    setJiraLoading(true)
-    setJiraResult(null)
+  const loadTeam = async () => {
+    setTeamLoading(true)
     try {
-      const res = await fetch(`${API}/create-jira-tickets`, {
+      const res = await fetch(`${API}/team`)
+      if (res.ok) setTeam(await res.json())
+    } catch { /* offline */ }
+    finally { setTeamLoading(false) }
+  }
+
+  const handleAddMember = async () => {
+    if (!newName.trim() || !newEmail.trim()) return
+    setTeamError('')
+    try {
+      const res = await fetch(`${API}/team`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meeting_id: result.id, assignee_email: jiraEmail.trim() }),
+        body: JSON.stringify({ name: newName.trim(), email: newEmail.trim() }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Failed to create Jira tickets')
-      setJiraResult({ tickets: data.tickets })
-    } catch (err) {
-      setJiraResult({ error: err.message })
-    } finally {
-      setJiraLoading(false)
-    }
+      if (!res.ok) throw new Error(data.detail || 'Failed to add member')
+      setTeam(prev => [...prev, data])
+      setNewName(''); setNewEmail('')
+    } catch (err) { setTeamError(err.message) }
+  }
+
+  const handleDeleteMember = async (id) => {
+    try {
+      await fetch(`${API}/team/${id}`, { method: 'DELETE' })
+      setTeam(prev => prev.filter(m => m.id !== id))
+    } catch { /* offline */ }
   }
 
   const loadHistory = async () => {
@@ -367,7 +382,7 @@ export default function App() {
     }
   }
 
-  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false); setMeetingName(''); setJiraEmail(''); setJiraResult(null) }
+  const reset = () => { setStep(0); setFile(null); setResult(null); setError(''); setStatus(''); setShowHistory(false); setMeetingName('') }
 
   const handleToggleHistory = async () => {
     if (!showHistory && meetings.length === 0) await loadHistory()
@@ -386,7 +401,7 @@ export default function App() {
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '56px 24px 80px' }}>
 
         {/* ── Header ── */}
-        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             background: '#7c3aed15', border: '1px solid #7c3aed30',
@@ -411,11 +426,29 @@ export default function App() {
           </p>
         </div>
 
-        {/* ── Steps ── */}
-        <StepProgress currentStep={step} />
+        {/* ── Tab Nav ── */}
+        <div style={{
+          display: 'flex', gap: 4, background: '#0f172a', border: '1px solid #1e293b',
+          borderRadius: 12, padding: 4, marginBottom: '2rem',
+        }}>
+          {[['upload', 'Meetings'], ['team', 'Team']].map(([key, label]) => (
+            <button key={key} onClick={() => { setTab(key); if (key === 'team' && team.length === 0) loadTeam() }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                background: tab === key ? '#7c3aed' : 'transparent',
+                color: tab === key ? '#fff' : '#475569',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Steps (upload tab only) ── */}
+        {tab === 'upload' && <StepProgress currentStep={step} />}
 
         {/* ── Upload / Processing ── */}
-        {step < 3 && (
+        {tab === 'upload' && step < 3 && (
           <div>
             {step === 0 && (
               <input
@@ -469,7 +502,7 @@ export default function App() {
         )}
 
         {/* ── Results ── */}
-        {result && step === 3 && (
+        {tab === 'upload' && result && step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Summary */}
@@ -529,80 +562,11 @@ export default function App() {
               ))}
             </div>
 
-            {/* Jira */}
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 18, padding: '24px 28px' }}>
-              <SectionHeader
-                icon={<svg width="14" height="14" fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>}
-                title="Create Jira Tickets"
-              />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <input
-                  type="email"
-                  placeholder="Assignee email"
-                  value={jiraEmail}
-                  onChange={e => { setJiraEmail(e.target.value); setJiraResult(null) }}
-                  style={{
-                    flex: 1, background: '#1e293b', border: '1px solid #334155',
-                    borderRadius: 10, padding: '10px 14px',
-                    color: '#e2e8f0', fontSize: 13, outline: 'none',
-                  }}
-                  onFocus={e => e.target.style.borderColor = '#7c3aed60'}
-                  onBlur={e => e.target.style.borderColor = '#334155'}
-                />
-                <button
-                  onClick={handleCreateJira}
-                  disabled={jiraLoading || !jiraEmail.trim()}
-                  style={{
-                    background: jiraLoading || !jiraEmail.trim() ? '#1e293b' : '#7c3aed',
-                    border: 'none', borderRadius: 10,
-                    color: jiraLoading || !jiraEmail.trim() ? '#475569' : '#fff',
-                    fontSize: 13, fontWeight: 600, padding: '10px 20px',
-                    cursor: jiraLoading || !jiraEmail.trim() ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    transition: 'background 0.2s',
-                    whiteSpace: 'nowrap',
-                  }}>
-                  {jiraLoading ? <><SpinIcon size={13} /> Creating...</> : 'Create Tickets'}
-                </button>
-              </div>
-
-              {jiraResult?.tickets && (
-                <div style={{
-                  marginTop: 14, background: '#16a34a15', border: '1px solid #16a34a30',
-                  borderRadius: 10, padding: '12px 16px',
-                }}>
-                  <p style={{ color: '#4ade80', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                    {jiraResult.tickets.length} ticket{jiraResult.tickets.length !== 1 ? 's' : ''} created
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {jiraResult.tickets.map(key => (
-                      <span key={key} style={{
-                        background: '#16a34a20', border: '1px solid #16a34a40',
-                        color: '#86efac', fontSize: 12, fontWeight: 600,
-                        padding: '3px 10px', borderRadius: 999,
-                      }}>{key}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {jiraResult?.error && (
-                <div style={{
-                  marginTop: 14, background: '#ef444415', border: '1px solid #ef444430',
-                  borderRadius: 10, padding: '12px 16px',
-                }}>
-                  <p style={{ color: '#fca5a5', fontSize: 13 }}>{jiraResult.error}</p>
-                </div>
-              )}
-            </div>
-
           </div>
         )}
 
         {/* ── History ── */}
-        {showHistory && step === 0 && (
+        {tab === 'upload' && showHistory && step === 0 && (
           <div style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <span style={{ color: '#334155', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
@@ -611,6 +575,109 @@ export default function App() {
               <div style={{ flex: 1, height: 1, background: '#1e293b' }} />
             </div>
             <MeetingHistory meetings={meetings} onSelect={handleSelectMeeting} />
+          </div>
+        )}
+
+        {/* ── Team Tab ── */}
+        {tab === 'team' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Add member */}
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 18, padding: '24px 28px' }}>
+              <SectionHeader
+                icon={<svg width="14" height="14" fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>}
+                title="Add Team Member"
+              />
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <input
+                  placeholder="Name"
+                  value={newName}
+                  onChange={e => { setNewName(e.target.value); setTeamError('') }}
+                  style={{
+                    flex: 1, minWidth: 120, background: '#1e293b', border: '1px solid #334155',
+                    borderRadius: 10, padding: '10px 14px', color: '#e2e8f0', fontSize: 13, outline: 'none',
+                  }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed60'}
+                  onBlur={e => e.target.style.borderColor = '#334155'}
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={newEmail}
+                  onChange={e => { setNewEmail(e.target.value); setTeamError('') }}
+                  style={{
+                    flex: 2, minWidth: 160, background: '#1e293b', border: '1px solid #334155',
+                    borderRadius: 10, padding: '10px 14px', color: '#e2e8f0', fontSize: 13, outline: 'none',
+                  }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed60'}
+                  onBlur={e => e.target.style.borderColor = '#334155'}
+                />
+                <button
+                  onClick={handleAddMember}
+                  disabled={!newName.trim() || !newEmail.trim()}
+                  style={{
+                    background: !newName.trim() || !newEmail.trim() ? '#1e293b' : '#7c3aed',
+                    border: 'none', borderRadius: 10,
+                    color: !newName.trim() || !newEmail.trim() ? '#475569' : '#fff',
+                    fontSize: 13, fontWeight: 600, padding: '10px 20px',
+                    cursor: !newName.trim() || !newEmail.trim() ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}>
+                  Add
+                </button>
+              </div>
+              {teamError && (
+                <p style={{ color: '#fca5a5', fontSize: 12, marginTop: 10 }}>{teamError}</p>
+              )}
+            </div>
+
+            {/* Member list */}
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 18, padding: '24px 28px' }}>
+              <SectionHeader
+                icon={<svg width="14" height="14" fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>}
+                title="Members"
+                badge={team.length}
+              />
+              {teamLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#475569', fontSize: 13 }}>
+                  <SpinIcon size={13} /> Loading...
+                </div>
+              ) : team.length === 0 ? (
+                <p style={{ color: '#334155', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+                  No team members yet. Add one above.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {team.map(m => (
+                    <div key={m.id} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: '#1e293b', borderRadius: 12, padding: '12px 16px',
+                    }}>
+                      <div>
+                        <p style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}>{m.name}</p>
+                        <p style={{ color: '#475569', fontSize: 12, marginTop: 2 }}>{m.email}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteMember(m.id)}
+                        style={{
+                          background: 'none', border: '1px solid #334155', borderRadius: 8,
+                          color: '#475569', fontSize: 12, padding: '5px 12px', cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = '#ef444440' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.borderColor = '#334155' }}>
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 

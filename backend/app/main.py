@@ -2,6 +2,7 @@ import logging
 import os
 import uuid
 import subprocess
+import difflib
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import List
@@ -15,7 +16,7 @@ from app.stt import transcribe_audio
 from app import nlp as nlp_mod
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
-from app.models import Meeting
+from app.models import Meeting, TeamMember
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -65,6 +66,10 @@ class ExtractIn(BaseModel):
 class JiraTicketIn(BaseModel):
     meeting_id: int
     assignee_email: EmailStr
+
+class TeamMemberIn(BaseModel):
+    name: str
+    email: EmailStr
 
 # ---- Helper functions for Jira/email ----
 def get_jira_account_id(email: str):
@@ -219,6 +224,36 @@ async def extract(body: ExtractIn):
     finally:
         db.close()
 
+    # Auto-create Jira tickets for tasks whose owner matches a team member
+    if JIRA_BASE and JIRA_EMAIL and JIRA_API_TOKEN:
+        try:
+            db2 = SessionLocal()
+            team = db2.query(TeamMember).all()
+            db2.close()
+            for t in tasks:
+                owner = (t.get("owner") or "").strip().lower()
+                if not owner:
+                    continue
+                team_names = [m.name.strip().lower() for m in team]
+                close = difflib.get_close_matches(owner, team_names, n=1, cutoff=0.75)
+                match = team[team_names.index(close[0])] if close else None
+                if match:
+                    task_text = t.get("task") or t.get("sentence", "")
+                    try:
+                        account_id = get_jira_account_id(match.email)
+                        issue = create_jira_issue(task_text, f"Auto-assigned from meeting #{body.id}", account_id)
+                        send_email(
+                            match.email,
+                            f"New Jira Ticket Assigned: {issue['key']}",
+                            f"Hi {match.name},\n\nYou have been auto-assigned a task from a meeting.\n\n"
+                            f"Task: {task_text}\n"
+                            f"Ticket: {JIRA_BASE}/browse/{issue['key']}"
+                        )
+                    except Exception:
+                        pass  # best-effort per task
+        except Exception:
+            pass  # don't fail the whole request
+
     if SLACK_WEBHOOK_URL:
         try:
             meeting_label = meeting.name if meeting.name else f"Meeting on {meeting.created_at.strftime('%b %d') if meeting.created_at else f'#{body.id}'}"
@@ -276,6 +311,31 @@ async def process_audio(file: UploadFile = File(...)):
         "summary": summary,
         "tasks": tasks
     }
+
+@app.get("/team")
+def list_team(db: Session = Depends(get_db)):
+    members = db.query(TeamMember).order_by(TeamMember.name).all()
+    return [{"id": m.id, "name": m.name, "email": m.email} for m in members]
+
+@app.post("/team")
+def add_team_member(data: TeamMemberIn, db: Session = Depends(get_db)):
+    existing = db.query(TeamMember).filter(TeamMember.email == data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A team member with that email already exists")
+    member = TeamMember(name=data.name.strip(), email=data.email.strip())
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return {"id": member.id, "name": member.name, "email": member.email}
+
+@app.delete("/team/{member_id}")
+def delete_team_member(member_id: int, db: Session = Depends(get_db)):
+    member = db.get(TeamMember, member_id)
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    db.delete(member)
+    db.commit()
+    return {"status": "deleted"}
 
 @app.post("/create-jira-tickets")
 def create_jira_tickets(data: JiraTicketIn, db: Session = Depends(get_db)):
